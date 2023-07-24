@@ -135,6 +135,14 @@ library
         deepseq,
         directory
 
+    if os(linux)
+        other-modules:
+            Network.Socket.URing    
+
+        build-depends:
+            uring-manager,
+            linux-io-uring
+
     if !os(windows)
         other-modules:
             Network.Socket.ByteString.Lazy.Posix

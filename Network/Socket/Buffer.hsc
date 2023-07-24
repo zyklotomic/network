@@ -42,6 +42,9 @@ import Network.Socket.Name
 import Network.Socket.Types
 import Network.Socket.Flag
 
+import qualified Control.Concurrent.URingManager as UM
+import qualified Network.Socket.URing as U
+
 #if defined(mingw32_HOST_OS)
 type DWORD   = Word32
 type LPDWORD = Ptr DWORD
@@ -92,11 +95,15 @@ sendBuf s str len = fromIntegral <$> do
     throwSocketErrorIfMinus1Retry "Network.Socket.sendBuf" $
       writeRawBufferPtr "Network.Socket.sendBuf" fd (castPtr str) 0 clen
 #else
-    withFdSocket s $ \fd -> do
-        let flags = 0
-            clen = fromIntegral len
-        throwSocketErrorWaitWrite s "Network.Socket.sendBuf" $
-          c_send fd str clen flags
+    withFdSocket s $ \fd ->
+        if UM.supportsIOURing
+            then U.throwSocketErrorIfCqeResNegative "Network.Socket.sendBuf uring"
+                    (fromIntegral <$> (UM.submitBlocking (U.send fd str clen flags)))
+            else throwSocketErrorWaitWrite s "Network.Socket.sendBuf"
+                    (c_send fd str clen flags)
+	where
+		flags = 0
+		clen = fromIntegral len
 #endif
 
 -- | Receive data from the socket, writing it into buffer instead of
@@ -149,8 +156,10 @@ recvBuf s ptr nbytes
              readRawBufferPtr "Network.Socket.recvBuf" fd ptr 0 cnbytes
 #else
     len <- withFdSocket s $ \fd ->
-        throwSocketErrorWaitRead s "Network.Socket.recvBuf" $
-             c_recv fd (castPtr ptr) (fromIntegral nbytes) 0{-flags-}
+		if UM.supportsIOURing
+			then fromIntegral <$> (UM.submitBlocking (U.recv fd ptr (fromIntegral nbytes) 0))
+			else (throwSocketErrorWaitRead s "Network.Socket.recvBuf"
+		             (c_recv fd (castPtr ptr) (fromIntegral nbytes) 0{-flags-}))
 #endif
     return $ fromIntegral len
 
