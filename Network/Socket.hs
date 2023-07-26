@@ -277,7 +277,8 @@ import Network.Socket.Options
 import Network.Socket.Shutdown
 import Network.Socket.SockAddr
 import Network.Socket.Syscall hiding (connect, bind, accept)
-import Network.Socket.Types
+import Network.Socket.Types hiding (close)
+import Network.Socket.URing (close)
 import Network.Socket.Unix
 #if !defined(mingw32_HOST_OS)
 import Network.Socket.Posix.Cmsg

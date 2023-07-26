@@ -1,5 +1,6 @@
 module Network.Socket.URing where
 
+import Control.Concurrent.URingManager as UM
 import System.Linux.IO.URing.Sqe
 import System.Posix.Types
 
@@ -8,7 +9,10 @@ import Foreign.C.Types
 import Data.Word
 
 import Network.Socket.Internal (throwSocketError)
+import qualified Network.Socket.Types as T
+  (Socket, invalidateSocket, close)
 import Data.Int (Int32)
+import Control.Monad (void)
 
 #include <linux/io_uring.h>
 
@@ -70,4 +74,26 @@ recv fd buf len flags userd = do
   setOpCode (#const IORING_OP_RECV)
   setFdBufLenFlags fd buf len flags
   setUserData userd
+
+
+-- | Prepare close SQE
+prepClose
+  :: CInt -- ^ 'Fd' to close
+  -> UserData
+  -> SqeBuilder ()
+prepClose fd userd = do
+  zeroIt
+  setOpCode (#const IORING_OP_CLOSE)
+  setUserData userd
+
+-- --------------------------------------------------------------------------
+-- Close with io_uring if supported
+-- TODO: Better module hierarchy, don't think this fn belongs here.
+close :: T.Socket -> IO ()
+close s = T.close s
+  -- if UM.supportsIOURing
+  --   then T.invalidateSocket s (\_ -> return ()) $ \oldfd ->
+  --     closeFdWith (\fd -> UM.submitBlocking (prepClose fd)) oldfd
+  --   else
+  --     T.close s
 
