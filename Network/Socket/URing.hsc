@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 module Network.Socket.URing where
 
 import Control.Concurrent.URingManager as UM
@@ -13,6 +14,7 @@ import qualified Network.Socket.Types as T
   (Socket, invalidateSocket, close)
 import Data.Int (Int32)
 import Control.Monad (void)
+import GHC.Conc (closeFdWith)
 
 #include <linux/io_uring.h>
 
@@ -84,16 +86,19 @@ prepClose
 prepClose fd userd = do
   zeroIt
   setOpCode (#const IORING_OP_CLOSE)
+  setFd (fromIntegral fd)
   setUserData userd
 
 -- --------------------------------------------------------------------------
 -- Close with io_uring if supported
 -- TODO: Better module hierarchy, don't think this fn belongs here.
 close :: T.Socket -> IO ()
-close s = T.close s
-  -- if UM.supportsIOURing
-  --   then T.invalidateSocket s (\_ -> return ()) $ \oldfd ->
-  --     closeFdWith (\fd -> UM.submitBlocking (prepClose fd)) oldfd
-  --   else
-  --     T.close s
+close s =
+  if UM.supportsIOURing
+    then T.invalidateSocket s (\_ -> return ()) $ \oldfd ->
+      closeFdWith
+        (\fd -> void (UM.submitBlocking "close" (prepClose (fromIntegral fd))))
+        (fromIntegral oldfd)
+    else
+      T.close s
 

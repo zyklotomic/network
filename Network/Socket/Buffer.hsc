@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 ##include "HsNetDef.h"
 #if defined(mingw32_HOST_OS)
@@ -98,7 +99,7 @@ sendBuf s str len = fromIntegral <$> do
     withFdSocket s $ \fd ->
         if UM.supportsIOURing
             then U.throwSocketErrorIfCqeResNegative "Network.Socket.sendBuf uring"
-                    (fromIntegral <$> (UM.submitBlocking (U.send fd str clen flags)))
+                    (fromIntegral <$> (UM.submitBlocking "sendBuf" (U.send fd str clen flags)))
             else throwSocketErrorWaitWrite s "Network.Socket.sendBuf"
                     (c_send fd str clen flags)
 	where
@@ -157,7 +158,7 @@ recvBuf s ptr nbytes
 #else
     len <- withFdSocket s $ \fd ->
 		if UM.supportsIOURing
-			then fromIntegral <$> (UM.submitBlocking (U.recv fd ptr (fromIntegral nbytes) 0))
+			then fromIntegral <$> (UM.submitBlocking "recvBuf" (U.recv fd ptr (fromIntegral nbytes) 0))
 			else (throwSocketErrorWaitRead s "Network.Socket.recvBuf"
 		             (c_recv fd (castPtr ptr) (fromIntegral nbytes) 0{-flags-}))
 #endif
